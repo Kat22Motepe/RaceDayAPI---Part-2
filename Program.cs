@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using RaceDay.Infrastructure;
 using RaceDay.API.Auth;
 
+
 var builder = WebApplication.CreateBuilder(args);
 
 // API to use Controllers
