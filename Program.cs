@@ -1,27 +1,51 @@
 using Microsoft.EntityFrameworkCore;
-using RaceDay.Infrastructure;
+using Microsoft.OpenApi;
 using RaceDay.API.Auth;
-
+using RaceDay.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// API to use Controllers
-builder.Services.AddControllers();
+// Add Controllers and the Bouncer (Auth Filter)
 builder.Services.AddScoped<SessionAuthFilter>();
 builder.Services.AddControllers(options =>
     options.Filters.AddService<SessionAuthFilter>());
 
-// Add Swagger (the menu of endpoints)
+// Add Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "RaceDay API",
+        Version = "v1",
+        Description = "The API for the RaceDay event management platform."
+    });
 
-// Connect the Database
+    // creates Authorize button
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Paste your session token here."
+    });
+
+   
+    c.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("Bearer", document)] = new List<string>()
+    });
+});
+
+// 3. Connect the Database
 builder.Services.AddDbContext<RaceDayDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 
 var app = builder.Build();
 
-// Turn on Swagger (only when running locally)
+// 4. Turn on Swagger (only when running locally)
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -33,6 +57,5 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
-
 
 public partial class Program { }
