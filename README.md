@@ -49,4 +49,4 @@ Video Presentation
 
 A comprehensive video walkthrough of this project is available. The video demonstrates the running application, explains the code structure, showcases the authentication and role-based logic, and demonstrates the unit tests passing.
 
-YouTube Video Link: 
+YouTube Video Link: https://youtu.be/RtnsF4RJC0c?si=7FoeVYXy-A3DagD7
