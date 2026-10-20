@@ -1,0 +1,305 @@
+CREATE DATABASE RaceDayDB;
+GO
+
+USE RaceDayDB;
+GO
+
+-- CREATE TABLES
+
+
+CREATE TABLE [User] (
+    UserId              INT             IDENTITY(1,1)   NOT NULL,
+    FirstName           NVARCHAR(50)                    NOT NULL,
+    LastName            NVARCHAR(50)                    NOT NULL,
+    Email               NVARCHAR(100)                   NOT NULL,
+    PasswordHash        NVARCHAR(255)                   NOT NULL,
+    PhoneNumber         NVARCHAR(20)                    NULL,
+    Role                NVARCHAR(20)                    NOT NULL,
+    ProfilePictureUrl   NVARCHAR(500)                   NULL,
+    CreatedAt           DATETIME2                       NOT NULL CONSTRAINT DF_User_CreatedAt DEFAULT GETUTCDATE(),
+    UpdatedAt           DATETIME2                       NULL,
+
+    CONSTRAINT PK_User PRIMARY KEY (UserId),
+    CONSTRAINT UQ_User_Email UNIQUE (Email),
+    CONSTRAINT CHK_User_Role CHECK (Role IN ('Organiser', 'Participant'))
+);
+GO
+
+
+CREATE TABLE [Event] (
+    EventId             INT             IDENTITY(1,1)   NOT NULL,
+    OrganiserId         INT                             NOT NULL,
+    Name                NVARCHAR(150)                   NOT NULL,
+    Description         NVARCHAR(MAX)                   NULL,
+    EventDate           DATETIME2                       NOT NULL,
+    Location            NVARCHAR(200)                   NOT NULL,
+    Distance            DECIMAL(6,2)                    NOT NULL,
+    EventType           NVARCHAR(20)                    NOT NULL,
+    BannerImageUrl      NVARCHAR(500)                   NULL,
+    CreatedAt           DATETIME2                       NOT NULL CONSTRAINT DF_Event_CreatedAt DEFAULT GETUTCDATE(),
+    UpdatedAt           DATETIME2                       NULL,
+
+    CONSTRAINT PK_Event PRIMARY KEY (EventId),
+    CONSTRAINT FK_Event_Organiser FOREIGN KEY (OrganiserId) REFERENCES [User](UserId),
+    CONSTRAINT CHK_Event_Distance CHECK (Distance > 0),
+    CONSTRAINT CHK_Event_Type CHECK (EventType IN ('Run', 'Walk', 'Cycle'))
+);
+GO
+
+
+CREATE TABLE [Category] (
+    CategoryId          INT             IDENTITY(1,1)   NOT NULL,
+    EventId             INT                             NOT NULL,
+    Name                NVARCHAR(100)                   NOT NULL,
+    Description         NVARCHAR(255)                   NULL,
+    MinAge              INT                             NULL,
+    MaxAge              INT                             NULL,
+    Distance            DECIMAL(6,2)                    NULL,
+    MaxParticipants     INT                             NULL,
+    CreatedAt           DATETIME2                       NOT NULL CONSTRAINT DF_Category_CreatedAt DEFAULT GETUTCDATE(),
+
+    CONSTRAINT PK_Category PRIMARY KEY (CategoryId),
+    CONSTRAINT FK_Category_Event FOREIGN KEY (EventId) REFERENCES [Event](EventId) ON DELETE CASCADE,
+    CONSTRAINT CHK_Category_MinAge CHECK (MinAge IS NULL OR MinAge >= 0),
+    CONSTRAINT CHK_Category_MaxAge CHECK (MaxAge IS NULL OR MaxAge >= 0),
+    CONSTRAINT CHK_Category_AgeRange CHECK (MinAge IS NULL OR MaxAge IS NULL OR MaxAge >= MinAge),
+    CONSTRAINT CHK_Category_Distance CHECK (Distance IS NULL OR Distance > 0),
+    CONSTRAINT CHK_Category_MaxParticipants CHECK (MaxParticipants IS NULL OR MaxParticipants > 0)
+);
+GO
+
+
+CREATE TABLE [Enrolment] (
+    EnrolmentId         INT             IDENTITY(1,1)   NOT NULL,
+    ParticipantId       INT                             NOT NULL,
+    EventId             INT                             NOT NULL,
+    CategoryId          INT                             NOT NULL,
+    EnrolmentDate       DATETIME2                       NOT NULL CONSTRAINT DF_Enrolment_Date DEFAULT GETUTCDATE(),
+    Status              NVARCHAR(20)                    NOT NULL CONSTRAINT DF_Enrolment_Status DEFAULT 'Pending',
+    UpdatedAt           DATETIME2                       NULL,
+
+    CONSTRAINT PK_Enrolment PRIMARY KEY (EnrolmentId),
+    CONSTRAINT FK_Enrolment_Participant FOREIGN KEY (ParticipantId) REFERENCES [User](UserId),
+    CONSTRAINT FK_Enrolment_Event FOREIGN KEY (EventId) REFERENCES [Event](EventId),
+    CONSTRAINT FK_Enrolment_Category FOREIGN KEY (CategoryId) REFERENCES [Category](CategoryId),
+    CONSTRAINT UQ_Enrolment_Participant_Event UNIQUE (ParticipantId, EventId),
+    CONSTRAINT CHK_Enrolment_Status CHECK (Status IN ('Pending', 'Confirmed', 'Cancelled'))
+);
+GO
+
+
+CREATE TABLE [Result] (
+    ResultId            INT             IDENTITY(1,1)   NOT NULL,
+    EnrolmentId         INT                             NOT NULL,
+    FinishTime          TIME(0)                         NOT NULL,
+    FinishingPosition   INT                             NOT NULL,
+    TotalFinishers      INT                             NULL,
+    CapturedAt          DATETIME2                       NOT NULL CONSTRAINT DF_Result_CapturedAt DEFAULT GETUTCDATE(),
+    CapturedBy          INT                             NOT NULL,
+
+    CONSTRAINT PK_Result PRIMARY KEY (ResultId),
+    CONSTRAINT FK_Result_Enrolment FOREIGN KEY (EnrolmentId) REFERENCES [Enrolment](EnrolmentId) ON DELETE CASCADE,
+    CONSTRAINT FK_Result_CapturedBy FOREIGN KEY (CapturedBy) REFERENCES [User](UserId),
+    CONSTRAINT UQ_Result_Enrolment UNIQUE (EnrolmentId),
+    CONSTRAINT CHK_Result_Position CHECK (FinishingPosition > 0),
+    CONSTRAINT CHK_Result_TotalFinishers CHECK (TotalFinishers IS NULL OR TotalFinishers > 0)
+);
+GO
+
+
+CREATE TABLE [EventOrganiser] (
+    EventOrganiserId    INT             IDENTITY(1,1)   NOT NULL,
+    EventId             INT                             NOT NULL,
+    OrganiserId         INT                             NOT NULL,
+    AssignedAt          DATETIME2                       NOT NULL CONSTRAINT DF_EventOrganiser_AssignedAt DEFAULT GETUTCDATE(),
+
+    CONSTRAINT PK_EventOrganiser PRIMARY KEY (EventOrganiserId),
+    CONSTRAINT FK_EventOrganiser_Event FOREIGN KEY (EventId) REFERENCES [Event](EventId) ON DELETE CASCADE,
+    CONSTRAINT FK_EventOrganiser_Organiser FOREIGN KEY (OrganiserId) REFERENCES [User](UserId),
+    CONSTRAINT UQ_EventOrganiser_Event_Organiser UNIQUE (EventId, OrganiserId)
+);
+GO
+
+
+CREATE TABLE [PasswordResetToken] (
+    TokenId             INT             IDENTITY(1,1)   NOT NULL,
+    UserId              INT                             NOT NULL,
+    Token               NVARCHAR(255)                   NOT NULL,
+    ExpiryDate          DATETIME2                       NOT NULL,
+    IsUsed              BIT                             NOT NULL CONSTRAINT DF_PasswordResetToken_IsUsed DEFAULT 0,
+    CreatedAt           DATETIME2                       NOT NULL CONSTRAINT DF_PasswordResetToken_CreatedAt DEFAULT GETUTCDATE(),
+
+    CONSTRAINT PK_PasswordResetToken PRIMARY KEY (TokenId),
+    CONSTRAINT FK_PasswordResetToken_User FOREIGN KEY (UserId) REFERENCES [User](UserId) ON DELETE CASCADE,
+    CONSTRAINT UQ_PasswordResetToken_Token UNIQUE (Token)
+);
+GO
+
+
+CREATE TABLE [AuditLog] (
+    LogId               INT             IDENTITY(1,1)   NOT NULL,
+    UserId              INT                             NULL,
+    Action              NVARCHAR(100)                   NOT NULL,
+    EntityType          NVARCHAR(50)                    NOT NULL,
+    EntityId            INT                             NULL,
+    Details             NVARCHAR(MAX)                   NULL,
+    IPAddress           NVARCHAR(45)                    NULL,
+    CreatedAt           DATETIME2                       NOT NULL CONSTRAINT DF_AuditLog_CreatedAt DEFAULT GETUTCDATE(),
+
+    CONSTRAINT PK_AuditLog PRIMARY KEY (LogId),
+    CONSTRAINT FK_AuditLog_User FOREIGN KEY (UserId) REFERENCES [User](UserId)
+);
+GO
+
+--  INDEXES
+
+CREATE INDEX IX_User_Email ON [User](Email);
+CREATE INDEX IX_User_Role ON [User](Role);
+CREATE INDEX IX_Event_OrganiserId ON [Event](OrganiserId);
+CREATE INDEX IX_Event_EventDate ON [Event](EventDate);
+CREATE INDEX IX_Event_EventType ON [Event](EventType);
+CREATE INDEX IX_Event_Location ON [Event](Location);
+CREATE INDEX IX_Category_EventId ON [Category](EventId);
+CREATE INDEX IX_Enrolment_ParticipantId ON [Enrolment](ParticipantId);
+CREATE INDEX IX_Enrolment_EventId ON [Enrolment](EventId);
+CREATE INDEX IX_Enrolment_CategoryId ON [Enrolment](CategoryId);
+CREATE INDEX IX_Enrolment_Status ON [Enrolment](Status);
+CREATE INDEX IX_Result_EnrolmentId ON [Result](EnrolmentId);
+CREATE INDEX IX_Result_CapturedBy ON [Result](CapturedBy);
+CREATE INDEX IX_EventOrganiser_EventId ON [EventOrganiser](EventId);
+CREATE INDEX IX_EventOrganiser_OrganiserId ON [EventOrganiser](OrganiserId);
+CREATE INDEX IX_AuditLog_UserId ON [AuditLog](UserId);
+CREATE INDEX IX_AuditLog_CreatedAt ON [AuditLog](CreatedAt);
+GO
+
+
+--  SEED DATA
+
+-- 4.1 Users (2 Organisers + 3 Participants)
+INSERT INTO [User] (FirstName, LastName, Email, PasswordHash, PhoneNumber, Role)
+VALUES
+    ('Thabo',  'Mokoena',       'thabo.mokoena@raceday.co.za',  '$2a$11$hash1ABC...', '0821234567', 'Organiser'),
+    ('Naledi', 'Dlamini',       'naledi.dlamini@raceday.co.za', '$2a$11$hash2DEF...', '0837654321', 'Organiser'),
+    ('Sipho',  'Ndlovu',        'sipho.ndlovu@email.co.za',     '$2a$11$hash3GHI...', '0841112222', 'Participant'),
+    ('Lerato', 'Khumalo',       'lerato.khumalo@email.co.za',   '$2a$11$hash4JKL...', '0853334444', 'Participant'),
+    ('Johan',  'van der Merwe', 'johan.vdm@email.co.za',        '$2a$11$hash5MNO...', '0865556666', 'Participant');
+GO
+
+-- 4.2 Events (3 Events)
+INSERT INTO [Event] (OrganiserId, Name, Description, EventDate, Location, Distance, EventType)
+VALUES
+    (1, 'Cape Town Marathon 2026',      'The iconic Cape Town Marathon through the Mother City.',       '2026-09-20 06:00:00', 'Cape Town, Western Cape',              42.20, 'Run'),
+    (1, 'Comrades Ultra Marathon 2026', 'The Ultimate Human Race — 90km between PMB and Durban.',       '2026-06-14 05:30:00', 'Pietermaritzburg to Durban, KZN',      90.00, 'Run'),
+    (2, 'Cape Town Cycle Tour 2026',    'The world''s largest individually timed cycle race.',          '2026-03-08 06:00:00', 'Cape Town, Western Cape',             109.00, 'Cycle');
+GO
+
+-- 4.3 Categories
+-- Event 1 — Cape Town Marathon
+INSERT INTO [Category] (EventId, Name, Description, MinAge, MaxAge, Distance, MaxParticipants)
+VALUES
+    (1, 'Senior Male',    'Male runners 20-39',    20, 39,   42.20, 500),
+    (1, 'Senior Female',  'Female runners 20-39',  20, 39,   42.20, 500),
+    (1, 'Veteran Male',   'Male runners 40-49',    40, 49,   42.20, 300),
+    (1, 'Veteran Female', 'Female runners 40-49',  40, 49,   42.20, 300),
+    (1, 'Master Male',    'Male runners 50+',      50, NULL, 42.20, 200),
+    (1, 'Master Female',  'Female runners 50+',    50, NULL, 42.20, 200);
+
+-- Event 2 — Comrades
+INSERT INTO [Category] (EventId, Name, Description, MinAge, MaxAge, Distance, MaxParticipants)
+VALUES
+    (2, 'Open Male',          'Male runners 18-39',   18, 39,   90.00, 1000),
+    (2, 'Open Female',        'Female runners 18-39', 18, 39,   90.00, 1000),
+    (2, 'Veteran Male',       'Male runners 40-49',   40, 49,   90.00, 800),
+    (2, 'Veteran Female',     'Female runners 40-49', 40, 49,   90.00, 800),
+    (2, 'Master Male',        'Male runners 50-59',   50, 59,   90.00, 500),
+    (2, 'Master Female',      'Female runners 50-59', 50, 59,   90.00, 500),
+    (2, 'Grand Master Male',  'Male runners 60+',     60, NULL, 90.00, 200),
+    (2, 'Grand Master Female','Female runners 60+',   60, NULL, 90.00, 200);
+
+-- Event 3 — Cycle Tour
+INSERT INTO [Category] (EventId, Name, Description, MinAge, MaxAge, Distance, MaxParticipants)
+VALUES
+    (3, 'Elite Male',     'Male cyclists 18-39',    18, 39,   109.00, 200),
+    (3, 'Elite Female',   'Female cyclists 18-39',  18, 39,   109.00, 200),
+    (3, 'Veteran Male',   'Male cyclists 40-49',    40, 49,   109.00, 300),
+    (3, 'Veteran Female', 'Female cyclists 40-49',  40, 49,   109.00, 300),
+    (3, 'Master Male',    'Male cyclists 50+',      50, NULL, 109.00, 250),
+    (3, 'Master Female',  'Female cyclists 50+',    50, NULL, 109.00, 250),
+    (3, 'Fun Ride',       'Non-competitive open',   NULL, NULL,109.00, 1000);
+GO
+
+-- 4.4 Enrolments
+INSERT INTO [Enrolment] (ParticipantId, EventId, CategoryId, Status)
+VALUES
+    (3, 1, 1, 'Confirmed'),  -- Sipho  → CT Marathon → Senior Male
+    (4, 1, 2, 'Confirmed'),  -- Lerato → CT Marathon → Senior Female
+    (5, 1, 3, 'Pending'),    -- Johan  → CT Marathon → Veteran Male
+    (3, 2, 7, 'Confirmed'),  -- Sipho  → Comrades    → Open Male
+    (4, 2, 8, 'Pending'),    -- Lerato → Comrades    → Open Female
+    (5, 3, 15,'Confirmed');  -- Johan  → Cycle Tour  → Veteran Male
+GO
+
+-- 4.5 Results (sample for completed event)
+INSERT INTO [Result] (EnrolmentId, FinishTime, FinishingPosition, TotalFinishers, CapturedBy)
+VALUES
+    (6, '03:45:22', 47, 312, 2);  -- Johan's Cycle Tour result
+GO
+
+-- 4.6 EventOrganiser (co-organisers)
+INSERT INTO [EventOrganiser] (EventId, OrganiserId)
+VALUES
+    (1, 2),  -- Naledi co-organises CT Marathon
+    (3, 1);  -- Thabo co-organises Cycle Tour
+GO
+
+-- 4.7 PasswordResetToken (demo)
+INSERT INTO [PasswordResetToken] (UserId, Token, ExpiryDate)
+VALUES
+    (3, 'sample-reset-token-abc123xyz', DATEADD(HOUR, 24, GETUTCDATE()));
+GO
+
+-- 4.8 AuditLog (sample)
+INSERT INTO [AuditLog] (UserId, Action, EntityType, EntityId, Details, IPAddress)
+VALUES
+    (1, 'CREATE', 'Event',    1, 'Created event: Cape Town Marathon 2026',    '192.168.1.100'),
+    (1, 'CREATE', 'Event',    2, 'Created event: Comrades Ultra Marathon 2026','192.168.1.100'),
+    (2, 'CREATE', 'Event',    3, 'Created event: Cape Town Cycle Tour 2026',  '192.168.1.101'),
+    (3, 'REGISTER','User',    3, 'New participant registered: Sipho Ndlovu',   '192.168.1.102'),
+    (3, 'ENROL',  'Enrolment',1, 'Enrolled in Cape Town Marathon 2026',       '192.168.1.102');
+GO
+
+
+-- VERIFICATION
+
+PRINT '=== RaceDay Database Created Successfully ===';
+
+SELECT UserId, FirstName, LastName, Email, Role FROM [User];
+
+SELECT e.EventId, e.Name, e.EventDate, e.Distance, e.EventType,
+       u.FirstName + ' ' + u.LastName AS Organiser
+FROM [Event] e
+INNER JOIN [User] u ON e.OrganiserId = u.UserId;
+
+SELECT c.CategoryId, c.Name AS Category, e.Name AS Event, c.MinAge, c.MaxAge
+FROM [Category] c
+INNER JOIN [Event] e ON c.EventId = e.EventId
+ORDER BY e.EventId, c.CategoryId;
+
+SELECT en.EnrolmentId,
+       u.FirstName + ' ' + u.LastName AS Participant,
+       e.Name AS EventName, c.Name AS CategoryName, en.Status
+FROM [Enrolment] en
+INNER JOIN [User] u     ON en.ParticipantId = u.UserId
+INNER JOIN [Event] e    ON en.EventId = e.EventId
+INNER JOIN [Category] c ON en.CategoryId = c.CategoryId;
+
+SELECT r.ResultId,
+       u.FirstName + ' ' + u.LastName AS Participant,
+       e.Name AS EventName, r.FinishTime, r.FinishingPosition, r.TotalFinishers
+FROM [Result] r
+INNER JOIN [Enrolment] en ON r.EnrolmentId = en.EnrolmentId
+INNER JOIN [User] u        ON en.ParticipantId = u.UserId
+INNER JOIN [Event] e       ON en.EventId = e.EventId;
+
+PRINT '=== Verification Complete ===';
+GO
