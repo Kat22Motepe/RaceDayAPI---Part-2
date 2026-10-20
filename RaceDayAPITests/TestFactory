@@ -1,0 +1,27 @@
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using RaceDay.Infrastructure;
+
+namespace RaceDay.API.Tests;
+
+// This factory spins up a fake version of our API using an in-memory database
+public class ApiTestFactory : WebApplicationFactory<Program>
+{
+    protected override IHost CreateHost(IHostBuilder builder)
+    {
+        builder.ConfigureServices(services =>
+        {
+            // Remove the real SQL Server database
+            var descriptor = services.SingleOrDefault(
+                d => d.ServiceType == typeof(DbContextOptions<RaceDayDbContext>));
+            if (descriptor != null) services.Remove(descriptor);
+
+            // Add a fake in-memory database just for the tests
+            services.AddDbContext<RaceDayDbContext>(o =>
+                o.UseInMemoryDatabase("RaceDayTestDb_" + Guid.NewGuid()));
+        });
+        return base.CreateHost(builder);
+    }
+}
